@@ -86,17 +86,46 @@ function Arrow({ direction, onClick }) {
 function App() {
   const [index, setIndex] = useState(6);
   const [showDashboard, setShowDashboard] = useState(false);
+
   const [direction, setDirection] = useState("next");
+  const [transitioning, setTransitioning] = useState(false);
+  const [incomingIndex, setIncomingIndex] = useState(null);
+
   const selected = ASEAN[index];
+
   const visibleCountries = useMemo(() => ({
     previous: ASEAN[(index - 1 + ASEAN.length) % ASEAN.length],
     selected,
     next: ASEAN[(index + 1) % ASEAN.length]
   }), [index, selected]);
 
+  const incomingCountries = useMemo(() => {
+    if (incomingIndex === null) return null;
+
+    const incomingSelected = ASEAN[incomingIndex];
+
+    return {
+      previous: ASEAN[(incomingIndex - 1 + ASEAN.length) % ASEAN.length],
+      selected: incomingSelected,
+      next: ASEAN[(incomingIndex + 1) % ASEAN.length]
+    };
+  }, [incomingIndex]);
+
   const move = (step) => {
+    if (transitioning) return;
+
+    const nextIndex =
+      (index + step + ASEAN.length) % ASEAN.length;
+
     setDirection(step > 0 ? "next" : "prev");
-    setIndex((current) => (current + step + ASEAN.length) % ASEAN.length);
+    setIncomingIndex(nextIndex);
+    setTransitioning(true);
+
+    window.setTimeout(() => {
+      setIndex(nextIndex);
+      setIncomingIndex(null);
+      setTransitioning(false);
+    }, 720);
   };
 
   return (
@@ -120,14 +149,85 @@ function App() {
           </div>
 
           <div className="country-carousel">
-            <Arrow direction="left" onClick={() => move(-1)} />
-            <div key={`${index}-${direction}`} className={`country-stage transition-${direction}`}>
-              <div className="side-country left"><CountryMap country={visibleCountries.previous} /><span>{visibleCountries.previous.name}</span></div>
-              <div className="center-country"><CountryMap country={visibleCountries.selected} active /><div className="country-label"><span>SELECTED REGION</span><h2>{visibleCountries.selected.name}</h2><div className={`risk-tag ${riskClass(selected.risk)}`}>{selected.risk.toUpperCase()} PRIORITY</div></div></div>
-              <div className="side-country right"><CountryMap country={visibleCountries.next} /><span>{visibleCountries.next.name}</span></div>
-            </div>
-            <Arrow direction="right" onClick={() => move(1)} />
+  <Arrow
+    direction="left"
+    onClick={() => move(-1)}
+  />
+
+  <div className={`country-stage-container ${transitioning ? "is-transitioning" : ""}`}>
+
+    {/* CURRENT COUNTRY STAGE */}
+    <div className={`country-stage current-stage ${transitioning ? `transition-out-${direction}` : ""}`}>
+
+      <div className="side-country left">
+        <CountryMap country={visibleCountries.previous} />
+        <span>{visibleCountries.previous.name}</span>
+      </div>
+
+      <div className="center-country">
+        <CountryMap
+          country={visibleCountries.selected}
+          active
+        />
+
+        <div className="country-label">
+          <span>SELECTED REGION</span>
+          <h2>{visibleCountries.selected.name}</h2>
+
+          <div className={`risk-tag ${riskClass(selected.risk)}`}>
+            {selected.risk.toUpperCase()} PRIORITY
           </div>
+        </div>
+      </div>
+
+      <div className="side-country right">
+        <CountryMap country={visibleCountries.next} />
+        <span>{visibleCountries.next.name}</span>
+      </div>
+
+    </div>
+
+
+    {/* INCOMING COUNTRY STAGE */}
+    {incomingCountries && (
+      <div className={`country-stage incoming-stage transition-in-${direction}`}>
+
+        <div className="side-country left">
+          <CountryMap country={incomingCountries.previous} />
+          <span>{incomingCountries.previous.name}</span>
+        </div>
+
+        <div className="center-country">
+          <CountryMap
+            country={incomingCountries.selected}
+            active
+          />
+
+          <div className="country-label">
+            <span>SELECTED REGION</span>
+            <h2>{incomingCountries.selected.name}</h2>
+
+            <div className={`risk-tag ${riskClass(incomingCountries.selected.risk)}`}>
+              {incomingCountries.selected.risk.toUpperCase()} PRIORITY
+            </div>
+          </div>
+        </div>
+
+        <div className="side-country right">
+          <CountryMap country={incomingCountries.next} />
+          <span>{incomingCountries.next.name}</span>
+        </div>
+
+      </div>
+    )}
+
+  </div>
+
+  <Arrow
+    direction="right"
+    onClick={() => move(1)}
+  />
+</div>
 
           <div className="brand-lockup"><div className="wordmark">RE<span>A</span>CT</div><div className="slogan">when disaster strikes, <b>REACT</b></div></div>
           <button className="enter-button" onClick={() => setShowDashboard(true)}>Open Command Center <span>→</span></button>

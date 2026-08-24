@@ -572,3 +572,274 @@ button { font: inherit; }
   .factor-grid { grid-template-columns: repeat(2, 1fr); }
   .map-panel .country-map { min-height: 220px; }
 }
+
+/* =========================================
+   REACT MORPH COUNTRY TRANSITION - FINAL
+   ========================================= */
+
+.country-stage-container {
+  position: relative;
+  width: 100%;
+  min-height: 390px;
+  overflow: visible;
+}
+
+.country-stage-container.is-transitioning {
+  overflow: visible;
+}
+
+/* Keep both the old and incoming country stages
+   in the same physical space during the transition. */
+
+.current-stage {
+  position: relative;
+  z-index: 2;
+}
+
+.incoming-stage {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+
+
+/* =========================================
+   MOVING TO THE NEXT COUNTRY
+   ========================================= */
+
+.transition-out-next .center-country {
+  animation: reactOldCenterLeft 720ms cubic-bezier(.16, 1, .3, 1) both;
+}
+
+.transition-out-next .side-country.left {
+  animation: reactOldSideLeft 720ms cubic-bezier(.16, 1, .3, 1) both;
+}
+
+.transition-out-next .side-country.right {
+  animation: reactOldSideRight 720ms cubic-bezier(.16, 1, .3, 1) both;
+}
+
+.transition-in-next .center-country {
+  animation: reactNewCenterRight 720ms cubic-bezier(.16, 1, .3, 1) both;
+}
+
+.transition-in-next .side-country.left {
+  animation: reactNewSideLeft 720ms cubic-bezier(.16, 1, .3, 1) both;
+}
+
+.transition-in-next .side-country.right {
+  animation: reactNewSideRight 720ms cubic-bezier(.16, 1, .3, 1) both;
+}
+
+
+/* =========================================
+   MOVING TO THE PREVIOUS COUNTRY
+   ========================================= */
+
+.transition-out-prev .center-country {
+  animation: reactOldCenterRight 720ms cubic-bezier(.16, 1, .3, 1) both;
+}
+
+.transition-out-prev .side-country.left {
+  animation: reactOldSideLeft 720ms cubic-bezier(.16, 1, .3, 1) both;
+}
+
+.transition-out-prev .side-country.right {
+  animation: reactOldSideRight 720ms cubic-bezier(.16, 1, .3, 1) both;
+}
+
+.transition-in-prev .center-country {
+  animation: reactNewCenterLeft 720ms cubic-bezier(.16, 1, .3, 1) both;
+}
+
+.transition-in-prev .side-country.left {
+  animation: reactNewSideLeft 720ms cubic-bezier(.16, 1, .3, 1) both;
+}
+
+.transition-in-prev .side-country.right {
+  animation: reactNewSideRight 720ms cubic-bezier(.16, 1, .3, 1) both;
+}
+
+
+/* =========================================
+   OLD CENTER COUNTRY
+   ========================================= */
+
+@keyframes reactOldCenterLeft {
+  from {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+    filter: blur(0);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateX(-25%) scale(.72);
+    filter: blur(4px);
+  }
+}
+
+@keyframes reactOldCenterRight {
+  from {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+    filter: blur(0);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateX(25%) scale(.72);
+    filter: blur(4px);
+  }
+}
+
+
+/* =========================================
+   OLD SIDE COUNTRIES
+   ========================================= */
+
+@keyframes reactOldSideLeft {
+  from {
+    opacity: .5;
+    transform: translateX(15%) scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateX(-30%) scale(.65);
+  }
+}
+
+@keyframes reactOldSideRight {
+  from {
+    opacity: .5;
+    transform: translateX(-15%) scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateX(30%) scale(.65);
+  }
+}
+
+
+/* =========================================
+   NEW CENTER COUNTRY
+   ========================================= */
+
+@keyframes reactNewCenterRight {
+  from {
+    opacity: 0;
+    transform: translateX(30%) scale(.72);
+    filter: blur(7px);
+  }
+
+  50% {
+    opacity: .75;
+    transform: translateX(8%) scale(.92);
+    filter: blur(2px);
+  }
+
+  80% {
+    opacity: 1;
+    transform: translateX(-2%) scale(1.03);
+    filter: blur(0);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+    filter: blur(0);
+  }
+}
+
+@keyframes reactNewCenterLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-30%) scale(.72);
+    filter: blur(7px);
+  }
+
+  50% {
+    opacity: .75;
+    transform: translateX(-8%) scale(.92);
+    filter: blur(2px);
+  }
+
+  80% {
+    opacity: 1;
+    transform: translateX(2%) scale(1.03);
+    filter: blur(0);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+    filter: blur(0);
+  }
+}
+
+
+/* =========================================
+   NEW SIDE COUNTRIES
+   ========================================= */
+
+@keyframes reactNewSideLeft {
+  from {
+    opacity: 0;
+    transform: translateX(45%) scale(.65);
+  }
+
+  to {
+    opacity: .5;
+    transform: translateX(15%) scale(1);
+  }
+}
+
+@keyframes reactNewSideRight {
+  from {
+    opacity: 0;
+    transform: translateX(45%) scale(.65);
+  }
+
+  to {
+    opacity: .5;
+    transform: translateX(-15%) scale(1);
+  }
+}
+
+
+/* Previous-country side movement */
+
+.transition-in-prev .side-country.left {
+  animation-name: reactNewSideLeftPrev;
+}
+
+.transition-in-prev .side-country.right {
+  animation-name: reactNewSideRightPrev;
+}
+
+@keyframes reactNewSideLeftPrev {
+  from {
+    opacity: 0;
+    transform: translateX(-45%) scale(.65);
+  }
+
+  to {
+    opacity: .5;
+    transform: translateX(15%) scale(1);
+  }
+}
+
+@keyframes reactNewSideRightPrev {
+  from {
+    opacity: 0;
+    transform: translateX(-45%) scale(.65);
+  }
+
+  to {
+    opacity: .5;
+    transform: translateX(-15%) scale(1);
+  }
+}

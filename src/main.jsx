@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { ComposableMap, Geographies, Geography, Marker } from "react-simple-maps";
 import worldData from "world-atlas/countries-50m.json";
@@ -21,8 +21,60 @@ const ASEAN = [
 const countryZoom = { SGP: 16000, BRN: 5000, TLS: 5000 };
 const riskClass = (risk) => risk.toLowerCase();
 
-function CountryMap({ country, active = false, dashboard = false, sites = [] }) {
-  const scale = dashboard ? (countryZoom[country.code] ?? 720) : (countryZoom[country.code] ? (active ? countryZoom[country.code] : countryZoom[country.code] * 0.7) : (active ? 850 : 620));
+const COMMUNICATION_CHANNELS = [
+  { id: "internet", name: "Internet / API", icon: "↗", status: "ONLINE", tone: "online", detail: "AHA Centre, national agencies, GIS and partner APIs" },
+  { id: "cellular", name: "Cellular", icon: "◉", status: "AVAILABLE", tone: "online", detail: "Mobile data when local cellular infrastructure is operational" },
+  { id: "sms", name: "SMS", icon: "✉", status: "FALLBACK", tone: "fallback", detail: "Structured emergency reports through SMS gateways" },
+  { id: "radio", name: "Radio", icon: "◌", status: "RELAY", tone: "relay", detail: "Responder radio relay to a connected command post" },
+  { id: "satellite", name: "Satellite", icon: "◒", status: "RESILIENT", tone: "resilient", detail: "Satellite / VSAT connectivity where terrestrial networks fail" },
+  { id: "offline", name: "Offline Queue", icon: "□", status: "NO SIGNAL", tone: "offline", detail: "Stores reports locally and synchronizes when a connection returns" }
+];
+
+const SITE_OFFSETS = {
+  BRN: [[0.22, 0.08], [-0.12, 0.18], [0.08, -0.12]],
+  KHM: [[0.55, 0.25], [-0.45, 0.05], [0.12, -0.45]],
+  IDN: [[1.7, 0.7], [-1.6, -0.1], [0.3, -1.0]],
+  LAO: [[0.45, 0.4], [-0.35, 0.15], [0.15, -0.45]],
+  MYS: [[1.2, 0.5], [-0.9, -0.1], [0.35, -0.65]],
+  MMR: [[1.0, 0.8], [-0.9, 0.15], [0.2, -0.9]],
+  PHL: [[-0.8, 2.2], [-1.9, 2.9], [-1.5, 4.0]],
+  SGP: [[0.035, 0.025], [-0.04, 0.0], [0.02, -0.035]],
+  THA: [[0.7, 0.45], [-0.65, 0.1], [0.15, -0.55]],
+  TLS: [[0.35, 0.18], [-0.28, 0.05], [0.05, -0.18]],
+  VNM: [[0.75, 0.6], [-0.65, 0.05], [0.15, -0.8]]
+};
+
+function buildSitesForCountry(country) {
+  if (country.code === "PHL") {
+    return baseSites.map((site) => ({ ...site }));
+  }
+
+  const offsets = SITE_OFFSETS[country.code] ?? [[0.3, 0.2], [-0.25, 0], [0.1, -0.25]];
+  const baseImpact = Math.max(10, Math.round(country.affected / 180));
+
+  return offsets.map(([lon, lat], index) => ({
+    id: index + 1,
+    short: String.fromCharCode(65 + index),
+    name: `${country.name} — ${["Priority Zone", "Relief Corridor", "Community Cluster"][index]}`,
+    casualties: Math.max(8, Math.round(baseImpact * [1.0, 0.35, 0.65][index])),
+    homes: Math.max(40, Math.round(country.homes * [0.65, 0.2, 0.4][index])),
+    aid: [48, 18, 30][index],
+    budget: [42, 12, 24][index],
+    workforce: [38, 16, 28][index],
+    urgency: Math.min(100, country.priority + [2, -12, -5][index]),
+    vulnerability: [78, 68, 73][index],
+    access: [55, 82, 66][index],
+    coords: [country.center[0] + lon, country.center[1] + lat]
+  }));
+}
+
+function CountryMap({ country, active = false, dashboard = false, sites = [], onCountryClick }) {
+  const scale = dashboard
+    ? (countryZoom[country.code] ?? 720)
+    : (countryZoom[country.code]
+      ? (active ? countryZoom[country.code] : countryZoom[country.code] * 0.7)
+      : (active ? 850 : 620));
+
   const width = dashboard ? 820 : active ? 520 : 300;
   const height = dashboard ? 430 : active ? 350 : 230;
 
@@ -37,41 +89,72 @@ function CountryMap({ country, active = false, dashboard = false, sites = [] }) 
         <defs>
           <filter id={`glow-${country.code}-${dashboard ? "dash" : "hero"}`}>
             <feGaussianBlur stdDeviation="3.5" result="blur" />
-            <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+            <feMerge>
+              <feMergeNode in="blur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
           </filter>
           <radialGradient id={`siteGlow-${country.code}`}>
             <stop offset="0%" stopColor="#ff5a3d" stopOpacity=".85" />
             <stop offset="100%" stopColor="#ff5a3d" stopOpacity="0" />
           </radialGradient>
         </defs>
+
         <Geographies geography={worldData}>
           {({ geographies }) => geographies.map((geo) => {
             const geoId = String(geo.id).padStart(3, "0");
             const isTarget = geoId === String(country.mapId).padStart(3, "0");
+
             return (
               <Geography
                 key={geo.rsmKey}
                 geography={geo}
+                onClick={() => {
+                  if (isTarget && onCountryClick) {
+                    onCountryClick(country.code);
+                  }
+                }}
                 style={{
                   default: {
-                    fill: isTarget ? (active || dashboard ? "#1677ff" : "#123f78") : "rgba(255,255,255,0.025)",
-                    stroke: isTarget ? (active || dashboard ? "#ffffff" : "rgba(116,183,255,.35)") : "rgba(255,255,255,.02)",
+                    fill: isTarget
+                      ? (active || dashboard ? "#1677ff" : "#123f78")
+                      : "rgba(255,255,255,0.025)",
+                    stroke: isTarget
+                      ? (active || dashboard ? "#ffffff" : "rgba(116,183,255,.35)")
+                      : "rgba(255,255,255,.02)",
                     strokeWidth: isTarget ? (active || dashboard ? 1.7 : .9) : .25,
                     outline: "none",
-                    filter: isTarget && (active || dashboard) ? `url(#glow-${country.code}-${dashboard ? "dash" : "hero"})` : "none"
+                    filter: isTarget && (active || dashboard)
+                      ? `url(#glow-${country.code}-${dashboard ? "dash" : "hero"})`
+                      : "none"
                   },
-                  hover: { fill: isTarget ? "#2388ff" : "rgba(255,255,255,.025)", stroke: isTarget ? "#fff" : "rgba(255,255,255,.02)", outline: "none" },
-                  pressed: { fill: isTarget ? "#2388ff" : "rgba(255,255,255,.025)", outline: "none" }
+                  hover: {
+                    fill: isTarget ? "#2388ff" : "rgba(255,255,255,.025)",
+                    stroke: isTarget ? "#fff" : "rgba(255,255,255,.02)",
+                    outline: "none"
+                  },
+                  pressed: {
+                    fill: isTarget ? "#2388ff" : "rgba(255,255,255,.025)",
+                    outline: "none"
+                  }
                 }}
               />
             );
           })}
         </Geographies>
+
         {dashboard && sites.map((site) => (
           <Marker key={site.id} coordinates={site.coords}>
-            <circle r="14" fill={`url(#siteGlow-${country.code})`} opacity=".55" />
-            <circle r="6" fill={site.score >= 75 ? "#ff4f37" : site.score >= 50 ? "#ffb34f" : "#47d79a"} stroke="#fff" strokeWidth="2" />
-            <text textAnchor="middle" y="-13" className="map-marker-label">{site.short}</text>
+            <circle r="16" fill={`url(#siteGlow-${country.code})`} opacity=".55" />
+            <circle
+              r="6"
+              fill={site.score >= 75 ? "#ff4f37" : site.score >= 50 ? "#ffb34f" : "#47d79a"}
+              stroke="#fff"
+              strokeWidth="2"
+            />
+            <text textAnchor="middle" y="-13" className="map-marker-label">
+              {site.short}
+            </text>
           </Marker>
         ))}
       </ComposableMap>
@@ -79,17 +162,26 @@ function CountryMap({ country, active = false, dashboard = false, sites = [] }) 
   );
 }
 
-function Arrow({ direction, onClick }) {
-  return <button className="carousel-arrow" onClick={onClick} aria-label={`${direction} country`}>{direction === "left" ? "‹" : "›"}</button>;
+function Arrow({ direction, onClick, disabled = false }) {
+  return (
+    <button
+      className="carousel-arrow"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={`${direction} country`}
+    >
+      {direction === "left" ? "‹" : "›"}
+    </button>
+  );
 }
 
 function App() {
   const [index, setIndex] = useState(6);
   const [showDashboard, setShowDashboard] = useState(false);
-
   const [direction, setDirection] = useState("next");
   const [transitioning, setTransitioning] = useState(false);
   const [incomingIndex, setIncomingIndex] = useState(null);
+  const transitionTimer = useRef(null);
 
   const selected = ASEAN[index];
 
@@ -111,131 +203,186 @@ function App() {
     };
   }, [incomingIndex]);
 
-  const move = (step) => {
-    if (transitioning) return;
+  useEffect(() => () => {
+    window.clearTimeout(transitionTimer.current);
+  }, []);
 
-    const nextIndex =
-      (index + step + ASEAN.length) % ASEAN.length;
+  const moveToIndex = (targetIndex) => {
+    if (transitioning || targetIndex === index) return;
 
-    setDirection(step > 0 ? "next" : "prev");
-    setIncomingIndex(nextIndex);
+    const forwardDistance = (targetIndex - index + ASEAN.length) % ASEAN.length;
+    const backwardDistance = (index - targetIndex + ASEAN.length) % ASEAN.length;
+
+    const stepDirection = forwardDistance <= backwardDistance ? 1 : -1;
+
+    setDirection(stepDirection > 0 ? "next" : "prev");
+    setIncomingIndex(targetIndex);
     setTransitioning(true);
 
-    window.setTimeout(() => {
-      setIndex(nextIndex);
+    window.clearTimeout(transitionTimer.current);
+    transitionTimer.current = window.setTimeout(() => {
+      setIndex(targetIndex);
       setIncomingIndex(null);
       setTransitioning(false);
     }, 720);
   };
 
+  const move = (step) => {
+    if (transitioning) return;
+    const nextIndex = (index + step + ASEAN.length) % ASEAN.length;
+    moveToIndex(nextIndex);
+  };
+
+  const selectCountry = (code) => {
+    const targetIndex = ASEAN.findIndex((country) => country.code === code);
+    if (targetIndex === -1) return;
+    moveToIndex(targetIndex);
+  };
+
   return (
     <main className="app-shell">
       <div className="noise" />
+
       <header className="topbar">
         <div className="brand">
           <img src="/react-logo.png" alt="REACT logo" />
-          <div><strong>REACT</strong><span>Relief & Emergency Allocation Coordination Technology</span></div>
+          <div>
+            <strong>REACT</strong>
+            <span>Relief & Emergency Allocation Coordination Technology</span>
+          </div>
         </div>
-        <div className="status-pill"><span className="status-dot" /> PROTOTYPE • ASEAN REGION</div>
+        <div className="status-pill">
+          <span className="status-dot" /> PROTOTYPE • ASEAN REGION
+        </div>
       </header>
 
       {!showDashboard ? (
         <section className="landing">
-          <div className="globe-orbit orbit-one" /><div className="globe-orbit orbit-two" /><div className="globe-core" />
+          <div className="globe-orbit orbit-one" />
+          <div className="globe-orbit orbit-two" />
+          <div className="globe-core" />
+
           <div className="hero-copy">
             <div className="eyebrow">AI-ASSISTED DISASTER RELIEF INTELLIGENCE</div>
             <h1>From disaster data<br />to smarter relief decisions.</h1>
-            <p>REACT combines verified disaster information, needs assessment, dynamic priority scoring and resource availability to help responders decide what should go where — and when.</p>
+            <p>
+              REACT combines verified disaster information, needs assessment,
+              dynamic priority scoring and resource availability to help
+              responders decide what should go where — and when.
+            </p>
           </div>
 
           <div className="country-carousel">
-  <Arrow
-    direction="left"
-    onClick={() => move(-1)}
-  />
+            <Arrow direction="left" onClick={() => move(-1)} disabled={transitioning} />
 
-  <div className={`country-stage-container ${transitioning ? "is-transitioning" : ""}`}>
+            <div className={`country-stage-container ${transitioning ? "is-transitioning" : ""}`}>
+              <div className={`country-stage current-stage ${transitioning ? `transition-out-${direction}` : ""}`}>
+                <div
+                  className="side-country left"
+                  onClick={() => selectCountry(visibleCountries.previous.code)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      selectCountry(visibleCountries.previous.code);
+                    }
+                  }}
+                >
+                  <CountryMap country={visibleCountries.previous} />
+                  <span>{visibleCountries.previous.name}</span>
+                </div>
 
-    {/* CURRENT COUNTRY STAGE */}
-    <div className={`country-stage current-stage ${transitioning ? `transition-out-${direction}` : ""}`}>
+                <div className="center-country">
+                  <CountryMap country={visibleCountries.selected} active />
+                  <div className="country-label">
+                    <span>SELECTED REGION</span>
+                    <h2>{visibleCountries.selected.name}</h2>
+                    <div className={`risk-tag ${riskClass(selected.risk)}`}>
+                      {selected.risk.toUpperCase()} PRIORITY
+                    </div>
+                  </div>
+                </div>
 
-      <div className="side-country left">
-        <CountryMap country={visibleCountries.previous} />
-        <span>{visibleCountries.previous.name}</span>
-      </div>
+                <div
+                  className="side-country right"
+                  onClick={() => selectCountry(visibleCountries.next.code)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      selectCountry(visibleCountries.next.code);
+                    }
+                  }}
+                >
+                  <CountryMap country={visibleCountries.next} />
+                  <span>{visibleCountries.next.name}</span>
+                </div>
+              </div>
 
-      <div className="center-country">
-        <CountryMap
-          country={visibleCountries.selected}
-          active
-        />
+              {incomingCountries && (
+                <div className={`country-stage incoming-stage transition-in-${direction}`}>
+                  <div className="side-country left">
+                    <CountryMap country={incomingCountries.previous} />
+                    <span>{incomingCountries.previous.name}</span>
+                  </div>
 
-        <div className="country-label">
-          <span>SELECTED REGION</span>
-          <h2>{visibleCountries.selected.name}</h2>
+                  <div className="center-country">
+                    <CountryMap country={incomingCountries.selected} active />
+                    <div className="country-label">
+                      <span>SELECTED REGION</span>
+                      <h2>{incomingCountries.selected.name}</h2>
+                      <div className={`risk-tag ${riskClass(incomingCountries.selected.risk)}`}>
+                        {incomingCountries.selected.risk.toUpperCase()} PRIORITY
+                      </div>
+                    </div>
+                  </div>
 
-          <div className={`risk-tag ${riskClass(selected.risk)}`}>
-            {selected.risk.toUpperCase()} PRIORITY
-          </div>
-        </div>
-      </div>
-
-      <div className="side-country right">
-        <CountryMap country={visibleCountries.next} />
-        <span>{visibleCountries.next.name}</span>
-      </div>
-
-    </div>
-
-
-    {/* INCOMING COUNTRY STAGE */}
-    {incomingCountries && (
-      <div className={`country-stage incoming-stage transition-in-${direction}`}>
-
-        <div className="side-country left">
-          <CountryMap country={incomingCountries.previous} />
-          <span>{incomingCountries.previous.name}</span>
-        </div>
-
-        <div className="center-country">
-          <CountryMap
-            country={incomingCountries.selected}
-            active
-          />
-
-          <div className="country-label">
-            <span>SELECTED REGION</span>
-            <h2>{incomingCountries.selected.name}</h2>
-
-            <div className={`risk-tag ${riskClass(incomingCountries.selected.risk)}`}>
-              {incomingCountries.selected.risk.toUpperCase()} PRIORITY
+                  <div className="side-country right">
+                    <CountryMap country={incomingCountries.next} />
+                    <span>{incomingCountries.next.name}</span>
+                  </div>
+                </div>
+              )}
             </div>
+
+            <Arrow direction="right" onClick={() => move(1)} disabled={transitioning} />
           </div>
-        </div>
 
-        <div className="side-country right">
-          <CountryMap country={incomingCountries.next} />
-          <span>{incomingCountries.next.name}</span>
-        </div>
+          <div className="brand-lockup">
+            <div className="wordmark">RE<span>A</span>CT</div>
+            <div className="slogan">when disaster strikes, <b>REACT</b></div>
+          </div>
 
-      </div>
-    )}
+          <button
+            className="enter-button"
+            onClick={() => {
+              setShowDashboard(true);
+              window.scrollTo({ top: 0, behavior: "auto" });
+            }}
+          >
+            Open Command Center <span>→</span>
+          </button>
 
-  </div>
-
-  <Arrow
-    direction="right"
-    onClick={() => move(1)}
-  />
-</div>
-
-          <div className="brand-lockup"><div className="wordmark">RE<span>A</span>CT</div><div className="slogan">when disaster strikes, <b>REACT</b></div></div>
-          <button className="enter-button" onClick={() => setShowDashboard(true)}>Open Command Center <span>→</span></button>
-          <div className="carousel-hint"><span>←</span> Browse ASEAN countries <span>→</span></div>
+          <div className="carousel-hint">
+            <span>←</span> Browse ASEAN countries <span>→</span>
+          </div>
         </section>
-      ) : <Dashboard country={selected} onBack={() => setShowDashboard(false)} />}
+      ) : (
+        <Dashboard
+          country={selected}
+          onBack={() => {
+            setShowDashboard(false);
+            window.scrollTo({ top: 0, behavior: "auto" });
+          }}
+        />
+      )}
 
-      <footer className="footer"><span>REACT • Decision support, not autonomous deployment.</span><span>AI recommends. Humans decide.</span></footer>
+      <footer className="footer">
+        <span>REACT • Decision support, not autonomous deployment.</span>
+        <span>AI recommends. Humans decide.</span>
+      </footer>
     </main>
   );
 }
@@ -247,74 +394,209 @@ const baseSites = [
 ];
 
 function scoreSite(site, maxCasualties, maxHomes) {
-  const impact = ((site.casualties / maxCasualties) * 0.65 + (site.homes / maxHomes) * 0.35) * 100;
-  const unmet = ((100 - site.aid) * 0.55 + (100 - site.budget) * 0.2 + (100 - site.workforce) * 0.25);
+  const impact = (
+    (site.casualties / maxCasualties) * 0.65 +
+    (site.homes / maxHomes) * 0.35
+  ) * 100;
+
+  const unmet = (
+    (100 - site.aid) * 0.55 +
+    (100 - site.budget) * 0.2 +
+    (100 - site.workforce) * 0.25
+  );
+
   const accessibilityNeed = 100 - site.access;
-  const score = impact * 0.35 + unmet * 0.30 + site.urgency * 0.20 + site.vulnerability * 0.10 + accessibilityNeed * 0.05;
+
+  const score =
+    impact * 0.35 +
+    unmet * 0.30 +
+    site.urgency * 0.20 +
+    site.vulnerability * 0.10 +
+    accessibilityNeed * 0.05;
+
   return Math.max(0, Math.min(100, Math.round(score)));
 }
 
 function Dashboard({ country, onBack }) {
-  const [sites, setSites] = useState(baseSites);
+  const [sites, setSites] = useState(() => buildSitesForCountry(country));
   const [toast, setToast] = useState("");
   const [lastAction, setLastAction] = useState("Waiting for an allocation decision");
   const [simulationTick, setSimulationTick] = useState(0);
+  const [activeChannel, setActiveChannel] = useState("internet");
+  const [channelState, setChannelState] = useState("Ready");
+  const [queuedReports, setQueuedReports] = useState([]);
+  const [syncedReports, setSyncedReports] = useState(0);
+  const toastTimer = useRef(null);
+
+  useEffect(() => {
+    setSites(buildSitesForCountry(country));
+    setSimulationTick(0);
+    setQueuedReports([]);
+    setSyncedReports(0);
+    setChannelState("Ready");
+    setLastAction("Waiting for an allocation decision");
+  }, [country.code]);
+
+  useEffect(() => () => {
+    window.clearTimeout(toastTimer.current);
+  }, []);
 
   const ranked = useMemo(() => {
-    const maxCasualties = Math.max(...sites.map(s => s.casualties), 1);
-    const maxHomes = Math.max(...sites.map(s => s.homes), 1);
-    return sites.map(site => ({ ...site, score: scoreSite(site, maxCasualties, maxHomes) })).sort((a, b) => b.score - a.score);
+    const maxCasualties = Math.max(...sites.map((site) => site.casualties), 1);
+    const maxHomes = Math.max(...sites.map((site) => site.homes), 1);
+
+    return sites
+      .map((site) => ({
+        ...site,
+        score: scoreSite(site, maxCasualties, maxHomes)
+      }))
+      .sort((a, b) => b.score - a.score);
   }, [sites]);
 
   const flash = (message) => {
     setToast(message);
-    window.clearTimeout(flash.timer);
-    flash.timer = window.setTimeout(() => setToast(""), 3200);
+    window.clearTimeout(toastTimer.current);
+    toastTimer.current = window.setTimeout(() => setToast(""), 3200);
   };
 
   const dispatchAid = (id) => {
-    const target = sites.find(s => s.id === id);
+    const target = sites.find((site) => site.id === id);
     if (!target) return;
-    setSites(current => current.map(site => site.id === id ? {
-      ...site,
-      aid: Math.min(100, site.aid + 20),
-      budget: Math.min(100, site.budget + 10),
-      workforce: Math.min(100, site.workforce + 15)
-    } : site));
+
+    setSites((current) =>
+      current.map((site) =>
+        site.id === id
+          ? {
+              ...site,
+              aid: Math.min(100, site.aid + 20),
+              budget: Math.min(100, site.budget + 10),
+              workforce: Math.min(100, site.workforce + 15)
+            }
+          : site
+      )
+    );
+
     setLastAction(`Allocation simulated for ${target.name}. Priority recalculated.`);
     flash(`Aid allocation recorded for ${target.short}. Priority will recalculate.`);
   };
 
   const simulateReport = () => {
-    setSimulationTick(t => t + 1);
-    setSites(current => current.map((site, i) => i === 1 ? {
-      ...site,
-      casualties: site.casualties + 45,
-      homes: site.homes + 120,
-      urgency: Math.min(100, site.urgency + 12)
-    } : site));
+    setSimulationTick((tick) => tick + 1);
+
+    setSites((current) =>
+      current.map((site, index) =>
+        index === 1
+          ? {
+              ...site,
+              casualties: site.casualties + 45,
+              homes: site.homes + 120,
+              urgency: Math.min(100, site.urgency + 12)
+            }
+          : site
+      )
+    );
+
     setLastAction("New field report ingested: Site B needs increased.");
     flash("New verified field report simulated. Priority queue updated.");
   };
 
+  const ingestFieldReport = () => {
+    const channel = COMMUNICATION_CHANNELS.find((item) => item.id === activeChannel);
+    if (!channel) return;
+
+    const report = {
+      id: `${Date.now()}-${activeChannel}`,
+      channel: channel.name,
+      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      status: activeChannel === "offline" ? "QUEUED" : "SYNCED"
+    };
+
+    setChannelState(activeChannel === "offline" ? "Stored locally — waiting for connectivity" : "Report received and validated");
+
+    if (activeChannel === "offline") {
+      setQueuedReports((current) => [...current, report]);
+      setLastAction(`Field report stored offline via ${channel.name}.`);
+      flash("No connection required: report queued locally for later synchronization.");
+      return;
+    }
+
+    setSyncedReports((count) => count + 1);
+
+    setSites((current) =>
+      current.map((site, index) =>
+        index === 1
+          ? {
+              ...site,
+              casualties: site.casualties + 25,
+              homes: site.homes + 80,
+              urgency: Math.min(100, site.urgency + 8)
+            }
+          : site
+      )
+    );
+
+    setLastAction(`Field report received via ${channel.name}. Priority recalculated.`);
+    flash(`Report ingested through ${channel.name}. Priority queue updated.`);
+  };
+
+  const syncQueuedReports = () => {
+    if (queuedReports.length === 0) {
+      setChannelState("No queued reports");
+      flash("There are no offline reports waiting to synchronize.");
+      return;
+    }
+
+    const amount = queuedReports.length;
+
+    setSites((current) =>
+      current.map((site, index) =>
+        index === 1
+          ? {
+              ...site,
+              casualties: site.casualties + 25 * amount,
+              homes: site.homes + 80 * amount,
+              urgency: Math.min(100, site.urgency + 8 * amount)
+            }
+          : site
+      )
+    );
+
+    setSyncedReports((count) => count + amount);
+    setQueuedReports([]);
+    setChannelState("Offline queue synchronized");
+    setLastAction(`${amount} queued field report${amount > 1 ? "s" : ""} synchronized. Priority recalculated.`);
+    flash(`${amount} offline report${amount > 1 ? "s" : ""} synchronized successfully.`);
+  };
+
   const resetSimulation = () => {
-    setSites(baseSites);
+    setSites(buildSitesForCountry(country));
     setSimulationTick(0);
+    setQueuedReports([]);
+    setSyncedReports(0);
+    setChannelState("Ready");
     setLastAction("Simulation reset to baseline conditions.");
-    flash("Priority simulation reset.");
+    flash("Priority and communication simulation reset.");
   };
 
   const top = ranked[0];
-  const topCountryPriority = Math.max(...ranked.map(s => s.score));
-  const totalAid = Math.round(sites.reduce((sum, s) => sum + s.aid, 0) / sites.length);
-  const dashboardCountry = country.code === "PHL" ? country : { ...country, center: country.center };
+  const topCountryPriority = Math.max(...ranked.map((site) => site.score));
 
   return (
     <section className="dashboard">
       <button className="back-button" onClick={onBack}>← ASEAN overview</button>
+
       <div className="dashboard-header">
-        <div><div className="eyebrow">REACT COMMAND CENTER</div><h1>{country.name} <span>• Decision Support Prototype</span></h1><p>REACT continuously reassesses need, impact, accessibility and aid coverage so limited resources can be redirected as the situation changes.</p></div>
-        <div className="ai-state"><span className="status-dot" /> EXPLAINABLE AI ENGINE</div>
+        <div>
+          <div className="eyebrow">REACT COMMAND CENTER</div>
+          <h1>{country.name} <span>• Decision Support Prototype</span></h1>
+          <p>
+            REACT continuously reassesses need, impact, accessibility and aid coverage
+            so limited resources can be redirected as the situation changes.
+          </p>
+        </div>
+        <div className="ai-state">
+          <span className="status-dot" /> EXPLAINABLE AI ENGINE
+        </div>
       </div>
 
       <div className="metric-grid">
@@ -324,59 +606,296 @@ function Dashboard({ country, onBack }) {
         <Metric title="Highest site priority" value={`${topCountryPriority}/100`} change={topCountryPriority >= 75 ? "CRITICAL" : "MONITOR"} />
       </div>
 
+      <section className="panel resilience-panel">
+        <div className="panel-title">
+          <div>
+            <span className="eyebrow">RESILIENT DATA INTAKE</span>
+            <h2>How REACT receives information when networks fail</h2>
+          </div>
+          <span className="live-badge">PROTOTYPE SIMULATION</span>
+        </div>
+
+        <p className="resilience-intro">
+          Field reports can enter through multiple communication paths. If no connection is available,
+          REACT stores the report locally and synchronizes it when connectivity returns.
+        </p>
+
+        <div className="channel-grid">
+          {COMMUNICATION_CHANNELS.map((channel) => (
+            <button
+              key={channel.id}
+              className={`channel-card ${activeChannel === channel.id ? "selected" : ""} channel-${channel.tone}`}
+              onClick={() => {
+                setActiveChannel(channel.id);
+                setChannelState(channel.id === "offline" ? "Offline mode selected" : `${channel.name} selected`);
+              }}
+            >
+              <span className="channel-icon">{channel.icon}</span>
+              <span className="channel-copy">
+                <strong>{channel.name}</strong>
+                <small>{channel.detail}</small>
+              </span>
+              <span className="channel-status">{channel.status}</span>
+            </button>
+          ))}
+        </div>
+
+        <div className="intake-actions">
+          <button className="secondary-action" onClick={ingestFieldReport}>
+            + Simulate field report
+          </button>
+
+          <button
+            className="ghost-action"
+            onClick={syncQueuedReports}
+            disabled={queuedReports.length === 0}
+          >
+            Sync offline queue ({queuedReports.length})
+          </button>
+
+          <span className="intake-state">
+            {channelState} • {syncedReports} synced
+          </span>
+        </div>
+
+        <div className="resilience-flow">
+          <span>FIELD REPORT</span>
+          <b>→</b>
+          <span>AVAILABLE CHANNEL</span>
+          <b>→</b>
+          <span>REACT INGESTION</span>
+          <b>→</b>
+          <span>DYNAMIC PRIORITY</span>
+        </div>
+      </section>
+
       <div className="dashboard-grid">
         <section className="panel priority-panel">
-          <div className="panel-title"><div><span className="eyebrow">DYNAMIC PRIORITY ENGINE</span><h2>Where should help go first?</h2></div><span className="live-badge">RECALCULATES LIVE</span></div>
-          <div className="simulation-controls"><button onClick={simulateReport} className="secondary-action">＋ Simulate new field report</button><button onClick={resetSimulation} className="ghost-action">Reset</button><span className="simulation-status">Simulation cycle {simulationTick}</span></div>
+          <div className="panel-title">
+            <div>
+              <span className="eyebrow">DYNAMIC PRIORITY ENGINE</span>
+              <h2>Where should help go first?</h2>
+            </div>
+            <span className="live-badge">RECALCULATES LIVE</span>
+          </div>
+
+          <div className="simulation-controls">
+            <button onClick={simulateReport} className="secondary-action">＋ Simulate new field report</button>
+            <button onClick={resetSimulation} className="ghost-action">Reset</button>
+            <span className="simulation-status">Simulation cycle {simulationTick}</span>
+          </div>
+
           <div className="priority-list">
             {ranked.map((site, position) => (
               <article className={`priority-row ${position === 0 ? "top-row" : ""}`} key={site.id}>
                 <div className="rank">{String(position + 1).padStart(2, "0")}</div>
-                <div className="site-info"><strong>{site.name}</strong><span>{site.casualties.toLocaleString()} casualties • {site.homes.toLocaleString()} homes affected • {site.access}% access</span></div>
-                <div className="priority-bar"><div style={{ width: `${site.score}%` }} /></div>
-                <div className="score"><strong>{site.score}</strong><span>priority</span></div>
+                <div className="site-info">
+                  <strong>{site.name}</strong>
+                  <span>
+                    {site.casualties.toLocaleString()} casualties • {site.homes.toLocaleString()} homes affected • {site.access}% access
+                  </span>
+                </div>
+                <div className="priority-bar">
+                  <div style={{ width: `${site.score}%` }} />
+                </div>
+                <div className="score">
+                  <strong>{site.score}</strong>
+                  <span>priority</span>
+                </div>
                 <button className="dispatch" onClick={() => dispatchAid(site.id)}>Allocate aid</button>
               </article>
             ))}
           </div>
+
           <div className="logic-box">
             <div className="logic-icon">AI</div>
-            <div><strong>Why the ranking changes</strong><p>Prototype score combines human impact, unmet needs, urgency, vulnerability and accessibility. Recorded aid reduces unmet need, while new reports can increase urgency and impact.</p></div>
+            <div>
+              <strong>Why the ranking changes</strong>
+              <p>
+                Prototype score combines human impact, unmet needs, urgency, vulnerability and accessibility.
+                Recorded aid reduces unmet need, while new reports can increase urgency and impact.
+              </p>
+            </div>
           </div>
+
           <div className="factor-grid">
-            <Factor label="Human impact" value="35%" /><Factor label="Unmet needs" value="30%" /><Factor label="Urgency" value="20%" /><Factor label="Vulnerability" value="10%" /><Factor label="Accessibility" value="5%" />
+            <Factor label="Human impact" value="35%" />
+            <Factor label="Unmet needs" value="30%" />
+            <Factor label="Urgency" value="20%" />
+            <Factor label="Vulnerability" value="10%" />
+            <Factor label="Accessibility" value="5%" />
           </div>
         </section>
 
         <aside className="right-stack">
           <section className="panel map-panel">
-            <div className="panel-title"><div><span className="eyebrow">SITUATIONAL MAP</span><h2>{country.name}</h2></div><span className="live-badge">DEMO DATA</span></div>
-            <CountryMap country={dashboardCountry} dashboard sites={country.code === "PHL" ? ranked : []} />
-            <div className="map-legend"><span><i className="legend-dot critical" /> Critical</span><span><i className="legend-dot high" /> High</span><span><i className="legend-dot monitored" /> Monitored</span></div>
+            <div className="panel-title">
+              <div>
+                <span className="eyebrow">SITUATIONAL MAP</span>
+                <h2>{country.name}</h2>
+              </div>
+              <span className="live-badge">DEMO DATA</span>
+            </div>
+
+            <CountryMap country={country} dashboard sites={ranked} />
+
+            <div className="map-legend">
+              <span><i className="legend-dot critical" /> Critical</span>
+              <span><i className="legend-dot high" /> High</span>
+              <span><i className="legend-dot monitored" /> Monitored</span>
+            </div>
           </section>
 
           <section className="panel allocation-panel">
-            <div className="panel-title"><div><span className="eyebrow">AI RECOMMENDATION</span><h2>Suggested allocation</h2></div></div>
-            <div className="recommendation"><div className="rec-top"><span>TOP PRIORITY</span><b>{top.name}</b></div><Allocation label="Relief goods" value="35,000 packs" /><Allocation label="Clean water" value="70,000 L" /><Allocation label="Medical kits" value="2,400" /><Allocation label="Emergency workforce" value="84 people" /><Allocation label="Recommended budget" value="$180,000" /><button className="approve-button" onClick={() => dispatchAid(top.id)}>Simulate approval →</button><small>AI recommends. Authorized responders approve, modify or reject.</small></div>
+            <div className="panel-title">
+              <div>
+                <span className="eyebrow">AI RECOMMENDATION</span>
+                <h2>Suggested allocation</h2>
+              </div>
+            </div>
+
+            <div className="recommendation">
+              <div className="rec-top">
+                <span>TOP PRIORITY</span>
+                <b>{top.name}</b>
+              </div>
+
+              <Allocation label="Relief goods" value="35,000 packs" />
+              <Allocation label="Clean water" value="70,000 L" />
+              <Allocation label="Medical kits" value="2,400" />
+              <Allocation label="Emergency workforce" value="84 people" />
+              <Allocation label="Recommended budget" value="$180,000" />
+
+              <button className="approve-button" onClick={() => dispatchAid(top.id)}>
+                Simulate approval →
+              </button>
+              <small>AI recommends. Authorized responders approve, modify or reject.</small>
+            </div>
           </section>
         </aside>
       </div>
 
       <div className="bottom-grid">
-        <section className="panel inventory-panel"><div className="panel-title"><div><span className="eyebrow">RESOURCE READINESS</span><h2>Available capacity</h2></div><span className="live-badge">ILLUSTRATIVE</span></div><Inventory label="Food packs" value={62000} max={100000} /><Inventory label="Clean water" value={74000} max={120000} /><Inventory label="Medical kits" value={8100} max={12000} /><Inventory label="Emergency workforce" value={168} max={250} /><div className="inventory-note">Coverage across connected warehouses / responders. Production version would ingest partner inventory APIs or operator updates.</div></section>
-        <section className="panel sources-panel"><div className="panel-title"><div><span className="eyebrow">DATA FABRIC</span><h2>What REACT would ingest</h2></div></div><div className="source-row"><Source name="AHA Centre / ADINet" status="Historical & regional disaster records" /><Source name="National agencies" status="Forecasts, alerts & impact reports" /><Source name="GIS / population" status="Exposure, roads & vulnerability" /><Source name="Verified field reports" status="Current needs & aid received" /></div><div className="confidence-box"><span className="confidence-ring">87%</span><div><strong>Recommendation confidence</strong><p>Prototype value only. Production confidence would depend on source freshness, completeness and model validation.</p></div></div></section>
+        <section className="panel inventory-panel">
+          <div className="panel-title">
+            <div>
+              <span className="eyebrow">RESOURCE READINESS</span>
+              <h2>Available capacity</h2>
+            </div>
+            <span className="live-badge">ILLUSTRATIVE</span>
+          </div>
+
+          <Inventory label="Food packs" value={62000} max={100000} />
+          <Inventory label="Clean water" value={74000} max={120000} />
+          <Inventory label="Medical kits" value={8100} max={12000} />
+          <Inventory label="Emergency workforce" value={168} max={250} />
+
+          <div className="inventory-note">
+            Coverage across connected warehouses / responders. Production version would ingest partner inventory APIs or operator updates.
+          </div>
+        </section>
+
+        <section className="panel sources-panel">
+          <div className="panel-title">
+            <div>
+              <span className="eyebrow">DATA FABRIC</span>
+              <h2>What REACT would ingest</h2>
+            </div>
+          </div>
+
+          <div className="source-row">
+            <Source name="AHA Centre / ADINet" status="Historical & regional disaster records" />
+            <Source name="National agencies" status="Forecasts, alerts & impact reports" />
+            <Source name="GIS / population" status="Exposure, roads & vulnerability" />
+            <Source name="Verified field reports" status="Current needs & aid received" />
+          </div>
+
+          <div className="confidence-box">
+            <span className="confidence-ring">87%</span>
+            <div>
+              <strong>Recommendation confidence</strong>
+              <p>
+                Prototype value only. Production confidence would depend on source freshness,
+                completeness and model validation.
+              </p>
+            </div>
+          </div>
+        </section>
       </div>
 
-      <div className="human-banner"><div><span className="eyebrow">HUMAN-IN-THE-LOOP</span><strong>AI recommends. Humans decide.</strong><p>Field responders retain final authority because real-world conditions can change faster than any model.</p></div><div className="last-action">{lastAction}</div></div>
+      <div className="human-banner">
+        <div>
+          <span className="eyebrow">HUMAN-IN-THE-LOOP</span>
+          <strong>AI recommends. Humans decide.</strong>
+          <p>Field responders retain final authority because real-world conditions can change faster than any model.</p>
+        </div>
+        <div className="last-action">{lastAction}</div>
+      </div>
+
       {toast && <div className="toast">{toast}</div>}
     </section>
   );
 }
 
-function Metric({ title, value, change }) { return <div className="metric-card"><span>{title}</span><strong>{value}</strong><small>{change}</small></div>; }
-function Allocation({ label, value }) { return <div className="allocation-line"><span>{label}</span><strong>{value}</strong></div>; }
-function Factor({ label, value }) { return <div className="factor"><span>{label}</span><strong>{value}</strong></div>; }
-function Inventory({ label, value, max }) { const pct = Math.round((value / max) * 100); return <div className="inventory-item"><div><span>{label}</span><strong>{value.toLocaleString()}</strong></div><div className="inventory-track"><div style={{ width: `${pct}%` }} /></div><small>{pct}% available</small></div>; }
-function Source({ name, status }) { return <div className="source-row-item"><div className="source-check">✓</div><div><strong>{name}</strong><span>{status}</span></div></div>; }
+function Metric({ title, value, change }) {
+  return (
+    <div className="metric-card">
+      <span>{title}</span>
+      <strong>{value}</strong>
+      <small>{change}</small>
+    </div>
+  );
+}
 
-createRoot(document.getElementById("root")).render(<React.StrictMode><App /></React.StrictMode>);
+function Allocation({ label, value }) {
+  return (
+    <div className="allocation-line">
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
+function Factor({ label, value }) {
+  return (
+    <div className="factor">
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
+function Inventory({ label, value, max }) {
+  const pct = Math.round((value / max) * 100);
+
+  return (
+    <div className="inventory-item">
+      <div>
+        <span>{label}</span>
+        <strong>{value.toLocaleString()}</strong>
+      </div>
+      <div className="inventory-track">
+        <div style={{ width: `${pct}%` }} />
+      </div>
+      <small>{pct}% available</small>
+    </div>
+  );
+}
+
+function Source({ name, status }) {
+  return (
+    <div className="source-row-item">
+      <div className="source-check">✓</div>
+      <div>
+        <strong>{name}</strong>
+        <span>{status}</span>
+      </div>
+    </div>
+  );
+}
+
+createRoot(document.getElementById("root")).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);

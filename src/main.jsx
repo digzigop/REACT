@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { ComposableMap, Geographies, Geography, Marker } from "react-simple-maps";
 import worldData from "world-atlas/countries-50m.json";
@@ -21,7 +21,7 @@ const ASEAN = [
 const countryZoom = { SGP: 16000, BRN: 5000, TLS: 5000 };
 const riskClass = (risk) => risk.toLowerCase();
 
-function CountryMap({ country, active = false, dashboard = false, sites = [], onCountryClick}) {
+function CountryMap({ country, active = false, dashboard = false, sites = [], onCountryClick }) {
   const scale = dashboard ? (countryZoom[country.code] ?? 720) : (countryZoom[country.code] ? (active ? countryZoom[country.code] : countryZoom[country.code] * 0.7) : (active ? 850 : 620));
   const width = dashboard ? 820 : active ? 520 : 300;
   const height = dashboard ? 430 : active ? 350 : 230;
@@ -52,8 +52,8 @@ function CountryMap({ country, active = false, dashboard = false, sites = [], on
               <Geography
                 key={geo.rsmKey}
                 geography={geo}
-                onClick = {() => {
-                  if(isTarget && onCountryClick){
+                onClick={() => {
+                  if (isTarget && onCountryClick) {
                     onCountryClick(country.code);
                   }
                 }}
@@ -166,107 +166,125 @@ function App() {
           </div>
 
           <div className="country-carousel">
-  <Arrow
-    direction="left"
-    onClick={() => move(-1)}
-  />
+            <Arrow
+              direction="left"
+              onClick={() => move(-1)}
+            />
 
-  <div className={`country-stage-container ${transitioning ? "is-transitioning" : ""}`}>
+            <div className={`country-stage-container ${transitioning ? "is-transitioning" : ""}`}>
 
-    {/* CURRENT COUNTRY STAGE */}
-    <div className={`country-stage current-stage ${transitioning ? `transition-out-${direction}` : ""}`}>
+              {/* CURRENT COUNTRY STAGE */}
+              <div className={`country-stage current-stage ${transitioning ? `transition-out-${direction}` : ""}`}>
 
-      <div
-        className="side-country left"
-        onClick={() => move(-1)}
-      style={{ cursor: "pointer" }}
-    >
-      <CountryMap country={visibleCountries.previous} />
-      <span>{visibleCountries.previous.name}</span>
-</div>
+                <div
+                  className="side-country left"
+                  onClick={() => move(-1)}
+                  style={{ cursor: "pointer" }}
+                >
+                  <CountryMap country={visibleCountries.previous} onCountryClick={selectCountry} />
+                  <span>{visibleCountries.previous.name}</span>
+                </div>
 
-      <div className="center-country">
-        <CountryMap
-          country={visibleCountries.selected}
-          active
-        />
+                <div className="center-country">
+                  <CountryMap
+                    country={visibleCountries.selected}
+                    active
+                    onCountryClick={selectCountry}
+                  />
 
-        <div className="country-label">
-          <span>SELECTED REGION</span>
-          <h2>{visibleCountries.selected.name}</h2>
+                  <div className="country-label">
+                    <span>SELECTED REGION</span>
+                    <h2>{visibleCountries.selected.name}</h2>
 
-          <div className={`risk-tag ${riskClass(selected.risk)}`}>
-            {selected.risk.toUpperCase()} PRIORITY
-          </div>
-        </div>
-      </div>
+                    <div className={`risk-tag ${riskClass(selected.risk)}`}>
+                      {selected.risk.toUpperCase()} PRIORITY
+                    </div>
+                  </div>
+                </div>
 
-      <div
-        className="side-country right"
-        onClick={() => move(1)}
-        style={{ cursor: "pointer" }}
-      >
-        <CountryMap country={visibleCountries.next} />
-        <span>{visibleCountries.next.name}</span>
-      </div>
+                <div
+                  className="side-country right"
+                  onClick={() => move(1)}
+                  style={{ cursor: "pointer" }}
+                >
+                  <CountryMap country={visibleCountries.next} onCountryClick={selectCountry} />
+                  <span>{visibleCountries.next.name}</span>
+                </div>
 
-    </div>
+              </div>
 
 
-    {/* INCOMING COUNTRY STAGE */}
-    {incomingCountries && (
-      <div className={`country-stage incoming-stage transition-in-${direction}`}>
+              {/* INCOMING COUNTRY STAGE */}
+              {incomingCountries && (
+                <div className={`country-stage incoming-stage transition-in-${direction}`}>
 
-        <div
-  className="side-country left"
-  onClick={() => move(-1)}
-  style={{ cursor: "pointer" }}
->
-  <CountryMap country={incomingCountries.previous} />
-  <span>{incomingCountries.previous.name}</span>
-</div>
+                  <div
+                    className="side-country left"
+                    onClick={() => move(-1)}
+                    style={{ cursor: "pointer" }}
+                  >
+                    <CountryMap country={incomingCountries.previous} onCountryClick={selectCountry} />
+                    <span>{incomingCountries.previous.name}</span>
+                  </div>
 
-        <div className="center-country">
-          <CountryMap
-            country={incomingCountries.selected}
-            active
-          />
+                  <div className="center-country">
+                    <CountryMap
+                      country={incomingCountries.selected}
+                      active
+                      onCountryClick={selectCountry}
+                    />
 
-          <div className="country-label">
-            <span>SELECTED REGION</span>
-            <h2>{incomingCountries.selected.name}</h2>
+                    <div className="country-label">
+                      <span>SELECTED REGION</span>
+                      <h2>{incomingCountries.selected.name}</h2>
 
-            <div className={`risk-tag ${riskClass(incomingCountries.selected.risk)}`}>
-              {incomingCountries.selected.risk.toUpperCase()} PRIORITY
+                      <div className={`risk-tag ${riskClass(incomingCountries.selected.risk)}`}>
+                        {incomingCountries.selected.risk.toUpperCase()} PRIORITY
+                      </div>
+                    </div>
+                  </div>
+
+                  <div
+                    className="side-country right"
+                    onClick={() => move(1)}
+                    style={{ cursor: "pointer" }}
+                  >
+                    <CountryMap country={incomingCountries.next} onCountryClick={selectCountry} />
+                    <span>{incomingCountries.next.name}</span>
+                  </div>
+
+                </div>
+              )}
+
             </div>
+
+            <Arrow
+              direction="right"
+              onClick={() => move(1)}
+            />
           </div>
-        </div>
-
-        <div
-  className="side-country right"
-  onClick={() => selectCountry(incomingCountries.next.code)}
-  style={{ cursor: "pointer" }}
->
-  <CountryMap country={incomingCountries.next} />
-  <span>{incomingCountries.next.name}</span>
-</div>
-
-      </div>
-    )}
-
-  </div>
-
-  <Arrow
-    direction="right"
-    onClick={() => move(1)}
-  />
-</div>
 
           <div className="brand-lockup"><div className="wordmark">RE<span>A</span>CT</div><div className="slogan">when disaster strikes, <b>REACT</b></div></div>
-          <button className="enter-button" onClick={() => setShowDashboard(true)}>Open Command Center <span>→</span></button>
+          <button
+            className="enter-button"
+            onClick={() => {
+              setShowDashboard(true);
+              window.scrollTo({ top: 0, behavior: "auto" });
+            }}
+          >
+            Open Command Center <span>→</span>
+          </button>
           <div className="carousel-hint"><span>←</span> Browse ASEAN countries <span>→</span></div>
         </section>
-      ) : <Dashboard country={selected} onBack={() => setShowDashboard(false)} />}
+      ) : (
+        <Dashboard
+          country={selected}
+          onBack={() => {
+            setShowDashboard(false);
+            window.scrollTo({ top: 0, behavior: "auto" });
+          }}
+        />
+      )}
 
       <footer className="footer"><span>REACT • Decision support, not autonomous deployment.</span><span>AI recommends. Humans decide.</span></footer>
     </main>
@@ -339,8 +357,6 @@ function Dashboard({ country, onBack }) {
 
   const top = ranked[0];
   const topCountryPriority = Math.max(...ranked.map(s => s.score));
-  const totalAid = Math.round(sites.reduce((sum, s) => sum + s.aid, 0) / sites.length);
-  const dashboardCountry = country.code === "PHL" ? country : { ...country, center: country.center };
 
   return (
     <section className="dashboard">
@@ -384,7 +400,7 @@ function Dashboard({ country, onBack }) {
         <aside className="right-stack">
           <section className="panel map-panel">
             <div className="panel-title"><div><span className="eyebrow">SITUATIONAL MAP</span><h2>{country.name}</h2></div><span className="live-badge">DEMO DATA</span></div>
-            <CountryMap country={dashboardCountry} dashboard sites={country.code === "PHL" ? ranked : []} />
+            <CountryMap country={country} dashboard sites={country.code === "PHL" ? ranked : []} />
             <div className="map-legend"><span><i className="legend-dot critical" /> Critical</span><span><i className="legend-dot high" /> High</span><span><i className="legend-dot monitored" /> Monitored</span></div>
           </section>
 
@@ -412,4 +428,43 @@ function Factor({ label, value }) { return <div className="factor"><span>{label}
 function Inventory({ label, value, max }) { const pct = Math.round((value / max) * 100); return <div className="inventory-item"><div><span>{label}</span><strong>{value.toLocaleString()}</strong></div><div className="inventory-track"><div style={{ width: `${pct}%` }} /></div><small>{pct}% available</small></div>; }
 function Source({ name, status }) { return <div className="source-row-item"><div className="source-check">✓</div><div><strong>{name}</strong><span>{status}</span></div></div>; }
 
-createRoot(document.getElementById("root")).render(<React.StrictMode><App /></React.StrictMode>);
+createRoot(document.getElementById("root")).render(
+  <React.StrictMode>
+    <>
+      <Loader />
+      <App />
+    </>
+  </React.StrictMode>
+);
+
+function Loader() {
+  const [visible, setVisible] = useState(true);
+  const [moving, setMoving] = useState(false);
+
+  useEffect(() => {
+    const startMove = window.setTimeout(() => {
+      setMoving(true);
+    }, 1200);
+
+    const finish = window.setTimeout(() => {
+      setVisible(false);
+    }, 1900);
+
+    return () => {
+      window.clearTimeout(startMove);
+      window.clearTimeout(finish);
+    };
+  }, []);
+
+  if (!visible) return null;
+
+  return (
+    <div className={`loader-wrapper ${moving ? "loader-moving" : ""}`}>
+      <img
+        className="loader-logo"
+        src="/react-logo.png"
+        alt="REACT"
+      />
+    </div>
+  );
+}

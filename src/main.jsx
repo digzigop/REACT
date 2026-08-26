@@ -16,21 +16,8 @@ import {
   Marker
 } from "react-simple-maps";
 
-/*
- * PERF: use the 110m-resolution topology instead of 50m.
- *
- * These maps render as small carousel thumbnails
- * (down to ~300x230px), so the extra coastline detail in
- * the 50m file is invisible but still has to be parsed,
- * laid out and painted as SVG path geometry. Up to six of
- * these maps can be mounted at once during a country
- * transition, so trimming the per-map path complexity is
- * the single biggest lever for transition smoothness.
- * Visually indistinguishable at this size; same package,
- * just the lighter-weight file.
- */
-import worldData from "world-atlas/countries-110m.json";
 import worldData50m from "world-atlas/countries-50m.json";
+import worldData110m from "world-atlas/countries-110m.json";
 
 import Strands from "./Strands";
 
@@ -39,8 +26,8 @@ import "./styles.css";
 
 /* =========================================================
    ASEAN DATA
-      ========================================================= */
-      
+   ========================================================= */
+
 const ASEAN = [
   {
     name: "Brunei",
@@ -203,9 +190,9 @@ const ASEAN = [
    ========================================================= */
 
 const countryZoom = {
-  // Singapore is extremely small in the 110m topology.
-  // The 50m topology below preserves its actual geometry.
-  SGP: 19000,
+  // SGP always renders from the 50m file (see CountryMap), so
+  // this zoom value is tuned for that resolution.
+  SGP: 16000,
   BRN: 5000,
   TLS: 5000
 };
@@ -322,8 +309,6 @@ const strandConfigByRisk = {
    COUNTRY MAP
    ========================================================= */
 
-
-   
 const CountryMap = memo(function CountryMap({
   country,
   active = false,
@@ -352,18 +337,18 @@ const CountryMap = memo(function CountryMap({
         );
 
   const width =
-  dashboard
-    ? 820
-    : active
-      ? 700
-      : 400;
+    dashboard
+      ? 820
+      : active
+        ? 520
+        : 300;
 
-const height =
-  dashboard
-    ? 430
-    : active
+  const height =
+    dashboard
       ? 430
-      : 280;
+      : active
+        ? 350
+        : 230;
 
   return (
     <div
@@ -375,19 +360,15 @@ const height =
           : ""
       }`}
     >
-      <ComposableMap 
-  projection="geoMercator" 
-  projectionConfig={{ 
-    center: country.center, 
-    scale 
-  }} 
-  width={width} 
-  height={height}
-  style={{
-    width: "100%",
-    height: "100%"
-  }}
->
+      <ComposableMap
+        projection="geoMercator"
+        projectionConfig={{
+          center: country.center,
+          scale
+        }}
+        width={width}
+        height={height}
+      >
         <defs>
 
           <filter
@@ -427,10 +408,22 @@ const height =
         </defs>
 
         <Geographies
+          /*
+           * Hybrid resolution: the center map (active) and the
+           * dashboard map are what people actually look closely
+           * at, so they get the full 50m detail. The two blurred
+           * side-thumbnails in the carousel never show that
+           * detail anyway, so they use the much lighter 110m
+           * file — that's where nearly all the transition-perf
+           * cost was coming from (up to six maps mounted at
+           * once mid-transition). Singapore is forced to 50m
+           * always: its geometry is nearly degenerate at 110m
+           * resolution and won't render recognizably otherwise.
+           */
           geography={
-            country.code === "SGP"
+            active || dashboard || country.code === "SGP"
               ? worldData50m
-              : worldData
+              : worldData110m
           }
         >
           {({
@@ -490,63 +483,84 @@ const height =
                         : undefined
                     }
 
-style={{
-  default: {
-    fill: isTarget
-      ? (
-          active || dashboard
-            ? "#1677ff"
-            : "#123f78"
-        )
-      : "rgba(255,255,255,0.025)",
+                    style={{
+                      default: {
+                        fill:
+                          isTarget
+                            ? (
+                                active ||
+                                dashboard
+                              )
+                              ? "#1677ff"
+                              : "#123f78"
+                            : "rgba(255,255,255,0.025)",
 
-    stroke: isTarget
-      ? (
-          active || dashboard
-            ? "#ffffff"
-            : "rgba(116,183,255,.35)"
-        )
-      : "rgba(255,255,255,.02)",
+                        stroke:
+                          isTarget
+                            ? (
+                                active ||
+                                dashboard
+                              )
+                              ? "#ffffff"
+                              : "rgba(116,183,255,.35)"
+                            : "rgba(255,255,255,.02)",
 
-    strokeWidth: isTarget
-      ? (
-          active || dashboard
-            ? 1.7
-            : 0.9
-        )
-      : 0.25,
+                        strokeWidth:
+                          isTarget
+                            ? (
+                                active ||
+                                dashboard
+                              )
+                              ? 1.7
+                              : 0.9
+                            : 0.25,
 
-    outline: "none",
+                        outline:
+                          "none",
 
-    filter:
-      isTarget &&
-      (active || dashboard)
-        ? `url(#glow-${country.code}-${
-            dashboard ? "dash" : "hero"
-          })`
-        : "none"
-  },
+                        /*
+                         * Only active maps get
+                         * the expensive SVG glow.
+                         */
+                        filter:
+                          isTarget &&
+                          (
+                            active ||
+                            dashboard
+                          )
+                            ? `url(#glow-${country.code}-${
+                                dashboard
+                                  ? "dash"
+                                  : "hero"
+                              })`
+                            : "none"
+                      },
 
-  hover: {
-    fill: isTarget
-      ? "#2388ff"
-      : "rgba(255,255,255,.025)",
+                      hover: {
+                        fill:
+                          isTarget
+                            ? "#2388ff"
+                            : "rgba(255,255,255,.025)",
 
-    stroke: isTarget
-      ? "#fff"
-      : "rgba(255,255,255,.02)",
+                        stroke:
+                          isTarget
+                            ? "#fff"
+                            : "rgba(255,255,255,.02)",
 
-    outline: "none"
-  },
+                        outline:
+                          "none"
+                      },
 
-  pressed: {
-    fill: isTarget
-      ? "#2388ff"
-      : "rgba(255,255,255,.025)",
+                      pressed: {
+                        fill:
+                          isTarget
+                            ? "#2388ff"
+                            : "rgba(255,255,255,.025)",
 
-    outline: "none"
-  }
-}}
+                        outline:
+                          "none"
+                      }
+                    }}
                   />
                 );
               }
@@ -597,6 +611,10 @@ style={{
   );
 });
 
+
+/* =========================================================
+   ARROW
+   ========================================================= */
 
 function Arrow({
   direction,
